@@ -1,0 +1,196 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>IFF.AFB.Api</name>
+    </assembly>
+    <members>
+        <member name="T:IFF.AFB.Api.Common.CustomAuthorizeAttribute">
+            <summary>
+            Custom attribute for checking authorization to API
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.AnalysisController.GetAnalysis(System.String,System.Int32,System.String)">
+            <summary>
+            Gets analysis based on request and run.
+            </summary>
+            <param name="request"></param>
+            <param name="run"></param>
+            <param name="fetchType"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.GetFormulas(System.String,System.String,System.Int32)">
+            <summary>
+            Gets formulas for the current or specified users
+            </summary>
+            <param name="userIds">
+            A comma-delimited list of user IDs. When specified, formulas created or owned by these users will be returned.
+            When unspecified, the formulas for the current user will be returned.
+            </param>
+            <param name="request">
+            Analysis request number.
+            </param>
+            <param name="run">
+            Analysis run number.
+            </param>
+            <param name="pageSize">
+            Page Size.
+            </param>
+            <param name="pageIndex">
+            Page Index.
+            </param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.Create(IFF.AFB.Entity.Dtos.FormulaCreateDto,System.String)">
+            <summary>
+            Creates a formula
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.Copy(System.Int32)">
+            <summary>
+            Copies a formula
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.Version(System.Int32,System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            Versions a formula
+            </summary>
+            <param name="id">The ID of the formula.</param>
+            <param name="major">
+            Set to true to create a major version of the formula. When set, minor and revision must not be set.
+            </param>
+            <param name="minor">
+            Set to true to create a minor version of the formula. When set, major and revision must not be set.
+            </param>
+            <param name="revision">
+            Set to true to create a revision version of the formula. When set, major and minor must not be set.
+            </param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.Update(System.Int32,IFF.AFB.Entity.Dtos.FormulaUpdateDto)">
+            <summary>
+            Updates a formula
+            </summary>
+            <param name="id">The ID of the formula.</param>
+            <param name="formulaData">
+            All fields are optional, any fields that are not set will remained unchanged.<br /><br />
+            Set active, completed, published, or abandoned to true to update the status of the formula. Only one status field can be set to true.
+            </param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.Delete(System.Int32)">
+            <summary>
+            Deletes a formula
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.Publish(System.Int32)">
+            <summary>
+            Publishes a formula
+            </summary>
+            <param name="formulaId">The ID of the formula.</param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.GetAnalysisComponents(System.Int32)">
+            <summary>
+            Gets analysis components
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.UpdateAnalysisComponents(System.Int32,System.Collections.Generic.List{IFF.AFB.Entity.Dtos.AnalysisComponentUpdateDto})">
+            <summary>
+            Update analysis components
+            </summary>
+            <param name="formulaId">The ID of the formula.</param>
+            <param name="analysisComponentData">
+            Accepts an array of analysis component data objects.<br /><br />
+            Only id is required. All other fields are optional, any fields that are not set will remained unchanged.
+            </param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.GetAnalysisComponentOccurrences(System.Int32,IFF.AFB.Entity.Dtos.IpcFilterDto)">
+            <summary>
+            Gets occurrence data for analysis components
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.GetAnalysisComponentUsedParts(System.Int32)">
+            <summary>
+            Gets used parts for analysis components
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.GetIngredients(System.Int32)">
+            <summary>
+            Gets ingredients
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.CreateIngredient(System.Int32,IFF.AFB.Entity.Dtos.IngredientCreateDto,System.String)">
+            <summary>
+            Creates an Ingredient
+            </summary>
+            <param name="formulaId"></param>
+            <param name="ingredientData"></param>
+            <param name="fetchType"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.UpdateIngredients(System.Int32,System.Collections.Generic.List{IFF.AFB.Entity.Dtos.IngredientUpdateDto})">
+            <summary>
+            Update ingredients
+            </summary>
+            <param name="formulaId">The ID of the formula.</param>
+            <param name="ingredientData">
+            Accepts an array of ingredient data objects.<br /><br />
+            Only id is required. All other fields are optional, any fields that are not set will remained unchanged.
+            </param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.DeleteIngredient(System.Int32,System.Int32)">
+            <summary>
+            Deletes an ingredient
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.GetIngredientsMatchingAnalysisComponent(System.Int32,System.Int32)">
+            <summary>
+            Gets ingredients that match the analysis component
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.FormulasController.GenerateCsvFormat(IFF.AFB.Entity.Dtos.FormulaExportDto)">
+            <summary>
+            Generates CSV format for Formula to be exported
+            </summary>
+            <param name="formula"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.IpcsController.Get(System.String,System.Int32,System.String)">
+            <summary>
+            Get IPC
+            </summary>
+            <param name="ipc">The IPC to get.</param>
+            <param name="formulaId">The ID of the formula.</param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.IpcsController.Search(System.Int32,IFF.AFB.Entity.Dtos.IpcSearchDto,System.String)">
+            <summary>
+            Search for IPCs
+            </summary>
+            <param name="formulaId">The ID of the formula.</param>
+            <param name="unitNumbers">A comma-separated list of unitNumbers.</param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.IpcsController.GetIpcComponents(System.String,System.Int32,System.String)">
+            <summary>
+            Gets IPC components
+            </summary>
+            <param name="request"></param>
+            <param name="run"></param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.SettingsController.Get">
+            <summary>
+            Gets settings for the current user
+            </summary>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.SettingsController.Update(IFF.AFB.Entity.Dtos.UserSettingsUpdateDto)">
+            <summary>
+            Updates settings for the current user
+            </summary>
+            <param name="userSettingsData">
+            All fields are optional, any fields that are not set will remained unchanged.<br /><br />
+            viewSettings must be valid JSON and can be used to store any settings related to views (default values, column order, etc.)
+            that are not explicitly set by the user
+            </param>
+        </member>
+        <member name="M:IFF.AFB.Api.Controllers.UsersController.GetUsers">
+            <summary>
+            Gets AFB users
+            </summary>
+        </member>
+    </members>
+</doc>
