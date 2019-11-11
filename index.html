@@ -1,0 +1,2287 @@
+1.Service Project Structure
+========================
+Web API
+Business
+Common
+Entity
+
+2.Third Party Components 
+===============================
+NewtonSoft.JSON
+Automapper
+RestSharp
+log4Net
+
+3.Project Details
+=======================
+
+I.Common Project
+= = = = = = =  = =
+LogHelper.cs
+--------------------
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using log4net;
+
+namespace IFF.AFB.Common
+{
+    public sealed class Logger
+    {
+        private static readonly ILog Log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+        private static object objLock = new object(); 
+        private static Logger logger = null;        
+        private Stopwatch watch;
+
+        private Logger()
+        {
+        }
+
+        public static Logger Instance
+        {
+            get
+            {
+                if (logger == null)
+                {
+                    lock (objLock)
+                    {
+                        if (logger == null)
+                        {
+                            return new Logger();
+                        }
+                    }
+                }
+
+                 return logger;
+            }
+        }
+        
+        public void LogStart(string logMethod)
+        { 
+            Log.Info(System.Environment.NewLine);
+            Log.Info($"******start-->{logMethod}*************************************");
+            watch = Stopwatch.StartNew();
+        }
+
+        public void LogEnd(string logMethod)
+        {
+            watch.Stop();            
+            Log.Info($"Total Time Taken-->{watch.Elapsed.ToString()}");
+            Log.Info($"********End--->{logMethod}***************************************");
+        }       
+    }
+}
+
+
+
+OracleHelper.cs
+------------------
+using System.Configuration;
+using System.Data;
+using Oracle.ManagedDataAccess.Client;
+
+namespace IFF.AFB.Common
+{
+    public class OracleHelper 
+    {
+        private static OracleConnection connection;
+
+        static OracleHelper()
+        {
+            connection = new OracleConnection();
+            connection.ConnectionString = ConfigurationManager.ConnectionStrings["OracleContext"].ConnectionString;
+        }
+        
+        public OracleCommand CreateCommand(CommandType type, string commandText)
+        {
+            OracleCommand command = new OracleCommand();
+            command.CommandType = type;
+            command.CommandText = commandText;
+            command.Connection = connection;
+            command.BindByName = true;
+
+            return command;
+        }
+
+        public void AddParameter(OracleCommand command, string name, OracleDbType type, ParameterDirection direction, object value = null)
+        {
+            OracleParameter oparam = command.Parameters.Add(name, type);
+            oparam.Direction = direction;
+            if (value != null)
+            {
+                oparam.Value = value;
+            }
+        }
+        
+        public void OpenConnection()
+        {
+            if (connection.State == ConnectionState.Closed)
+            {
+                connection.Open();
+            }
+        }
+
+        public void CloseConnection()
+        {
+            if (connection.State == ConnectionState.Open)
+            {
+                connection.Close();
+            }
+        }
+
+        public OracleDataReader ExecuteReader(OracleCommand command)
+        {
+            OpenConnection();
+
+            command.Connection = connection;
+            
+            OracleDataReader reader = command.ExecuteReader(CommandBehavior.CloseConnection);
+
+            return reader;
+        }
+
+        public DataTable GetDataTable(OracleCommand command)
+        {
+            OpenConnection();
+
+            command.Connection = connection;
+
+            OracleDataAdapter adapter = new OracleDataAdapter(command);
+            DataTable dataTable = new DataTable();
+            adapter.Fill(dataTable);
+
+            CloseConnection();
+
+            return dataTable;
+        }
+    }
+}
+
+
+
+UserIdentityHelper.cs
+-------------------------
+using System.Security.Principal;
+
+namespace IFF.AFB.Common
+{
+    public static class UserIdentityHelper
+    {
+        public static string DetermineUserId(IIdentity identity)
+        {
+            string userId = null;
+
+            if (identity != null && identity.IsAuthenticated)
+            {
+                var domainUsername = identity.Name;
+
+                if (domainUsername != null && domainUsername.Contains("\\"))
+                {
+                    userId = domainUsername.Split('\\')[1];
+                }
+            }
+
+            return userId;
+        }
+    }
+}
+
+
+II.'Entity' Project
+= = = = = = = = = = =
+Formula.cs
+----------------
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace IFF.AFB.Entity
+{
+    public class Formula
+    {
+        public int Id { get; set; }
+
+        public int Number { get; set; }
+
+        public int MajorVersion { get; set; }
+
+        public int MinorVersion { get; set; }
+
+        public int RevisionVersion { get; set; }
+
+        [StringLength(255)]
+        public string Description { get; set; }
+
+        public Division Division { get; set; }
+
+        public bool IsResponseFactorAdjusted { get; set; }
+
+        [StringLength(4)]
+        public string CostBook { get; set; }
+
+        [StringLength(3)]
+        public string Currency { get; set; }
+
+        public Status Status { get; set; }
+
+        [Required]
+        [StringLength(10)]
+        public string Request { get; set; }
+
+        public int Run { get; set; }
+
+        public string Notes { get; set; }
+
+        public int? ParentId { get; set; }
+
+        [StringLength(20)]
+        public string CreativeSystemNumber { get; set; }
+
+        [StringLength(10)]
+        public string CpaNumber { get; set; }
+
+        public DateTime? PublishedOn { get; set; }
+
+        [Required]
+        [StringLength(7)]
+        public string OwnedBy { get; set; }
+
+        [Required]
+        [StringLength(7)]
+        public string CreatedBy { get; set; }
+
+        public DateTime CreatedOn { get; set; }
+
+        [Required]
+        [StringLength(7)]
+        public string UpdatedBy { get; set; }
+
+        public DateTime UpdatedOn { get; set; }
+
+        public List<AnalysisComponent> AnalysisComponents { get; set; }
+
+        public List<Ingredient> Ingredients { get; set; }
+
+        [ForeignKey("ParentId")]
+        public virtual Formula Parent { get; set; }
+    }
+}
+
+DTO/FormulaDTO.cs
+------------------
+using System;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+
+namespace IFF.AFB.Entity.Dtos
+{
+    public class FormulaDto
+    {
+        [JsonProperty(PropertyName = "id")]
+        public int Id { get; set; }
+
+        [JsonProperty(PropertyName = "number")]
+        public int Number { get; set; }
+
+        [JsonProperty(PropertyName = "majorVersion")]
+        public int MajorVersion { get; set; }
+
+        [JsonProperty(PropertyName = "minorVersion")]
+        public int MinorVersion { get; set; }
+
+        [JsonProperty(PropertyName = "revisionVersion")]
+        public int RevisionVersion { get; set; }
+
+        [JsonProperty(PropertyName = "description")]
+        public string Description { get; set; }
+
+        [JsonProperty(PropertyName = "costBook")]
+        public string CostBook { get; set; }
+
+        [JsonProperty(PropertyName = "currency")]
+        public string Currency { get; set; }
+
+        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonProperty(PropertyName = "status")]
+        public Status Status { get; set; }
+
+        [JsonProperty(PropertyName = "request")]
+        public string Request { get; set; }
+
+        [JsonProperty(PropertyName = "run")]
+        public int Run { get; set; }
+
+        [JsonProperty(PropertyName = "notes")]
+        public string Notes { get; set; }
+
+        [JsonProperty(PropertyName = "creativeSystemNumber")]
+        public string CreativeSystemNumber { get; set; }
+
+        [JsonProperty(PropertyName = "cpaNumber")]
+        public string CpaNumber { get; set; }
+
+        [JsonProperty(PropertyName = "publishedOn")]
+        public DateTime? PublishedOn { get; set; }
+
+        [JsonProperty(PropertyName = "ownedBy")]
+        public string OwnedBy { get; set; }
+
+        [JsonProperty(PropertyName = "ownedByDisplayName")]
+        public string OwnedByDisplayName { get; set; }
+
+        [JsonProperty(PropertyName = "createdBy")]
+        public string CreatedBy { get; set; }
+
+        [JsonProperty(PropertyName = "createdByDisplayName")]
+        public string CreatedByDisplayName { get; set; }
+
+        [JsonProperty(PropertyName = "createdOn")]
+        public DateTime CreatedOn { get; set; }
+
+        [JsonProperty(PropertyName = "copiedFrom")]
+        public string CopiedFrom { get; set; }
+
+        [JsonProperty(PropertyName = "copiedTo")]
+        public string CopiedTo { get; set; }
+
+        [JsonProperty(PropertyName = "matchPercentage")]
+        public decimal MatchPercentage { get; set; }
+    }
+}
+
+BaseClasses/ManagerResult.cs
+------------------------------
+using System;
+
+namespace IFF.AFB.Entity.BaseClasses
+{
+    public class ManagerResult
+    {
+        public bool IsSuccessful { get; set; }
+
+        public bool IsNotFound { get; set; }
+
+        public bool IsUnauthorized { get; set; }
+
+        public bool IsServerError { get; set; }
+
+        public Exception ServerException { get; set; }
+
+        public bool IsClientError { get; set; }
+
+        public string ClientErrorMessage { get; set; }
+    }
+}
+
+
+III.Business Project
+= = = = = = = = = = = =
+BaseClasses/BusinessObjects.cs
+---------------------------------
+using System;
+using IFF.AFB.Entity.BaseClasses;
+
+namespace IFF.AFB.Business.BaseClasses
+{
+    public class BusinessObject
+    {
+        public static ManagerResult SuccessfulResult()
+        {
+            return new ManagerResult { IsSuccessful = true };
+        }
+
+        public static ManagerResult NotFoundResult()
+        {
+            return new ManagerResult { IsNotFound = true };
+        }
+
+        public static ManagerResult UnauthorizedResult()
+        {
+            return new ManagerResult { IsUnauthorized = true };
+        }
+
+        public static ManagerResult SaveFailedResult(Exception e)
+        {
+            return BuildServerErrorResult(e);
+        }
+
+        public static ManagerResult BuildServerErrorResult(Exception e)
+        {
+            return new ManagerResult { IsServerError = true, IsClientError = false, ServerException = e };
+        }
+
+        public static ManagerResult BuildClientErrorResult(string message)
+        {
+            return new ManagerResult { IsClientError = true, ClientErrorMessage = message };
+        }
+
+        protected static string GetStringOrNull(dynamic dynamicString)
+        {
+            var str = (string)dynamicString;
+
+            if (string.IsNullOrEmpty(str))
+            {
+                return null;
+            }
+
+            return str;
+        }
+
+        protected static int? GetIntOrNull(dynamic dynamicInt)
+        {
+            var stringInt = (string)dynamicInt;
+
+            if (string.IsNullOrEmpty(stringInt))
+            {
+                return null;
+            }
+
+            return Convert.ToInt32(stringInt);
+        }
+
+        protected static decimal? GetDecimalOrNull(dynamic dynamicDecimal)
+        {
+            var stringDecimal = (string)dynamicDecimal;
+
+            if (string.IsNullOrEmpty(stringDecimal))
+            {
+                return null;
+            }
+
+            return Convert.ToDecimal(stringDecimal);
+        }
+    }
+}
+
+Contracts\IFormulaManager.cs
+------------------------------
+using System.Collections.Generic;
+using IFF.AFB.Entity;
+using IFF.AFB.Entity.Dtos;
+
+namespace IFF.AFB.Business.Contracts
+{
+    public interface IFormulaManager
+    {
+        List<FormulaDto> Get(List<string> userIds, string request, int run);
+
+        List<FormulaDto> GetPaginatedFormulas(int pageSize, int pageIndex, List<string> userIds, string request, int run);
+
+        FormulaManagerResult Create(FormulaCreateDto createDto, string userId, ServiceParameters serviceParameters);
+
+        FormulaManagerResult Copy(int id, string userId);
+
+        FormulaManagerResult Version(int id, string userId, bool isMajor, bool isMinor, bool isRevision);
+
+        FormulaManagerResult Update(int id, FormulaUpdateDto updateDto, string userId);
+
+        FormulaManagerResult Delete(int id, string userId);
+
+        FormulaManagerResult Publish(int id, string userId);
+    }
+}
+
+MapperProfiles\AfbMapperProfile.cs
+------------------------------------
+using System;
+using AutoMapper;
+using IFF.AFB.Entity;
+using IFF.AFB.Entity.BaseClasses;
+using IFF.AFB.Entity.Dtos;
+
+namespace IFF.AFB.Business.MapperProfiles
+{
+    public class AfbMapperProfile : Profile
+    {
+        protected override void Configure()
+        {
+            CreateMap<AnalysisDto, Formula>()
+                .BeforeMap((a, f) => f.Status = Status.Active)
+                .BeforeMap((a, f) => f.CreatedOn = DateTime.UtcNow)
+                .BeforeMap((a, f) => f.UpdatedOn = DateTime.UtcNow)
+                .ForMember(f => f.AnalysisComponents, opt => opt.MapFrom(a => a.Components));
+
+            CreateMap<FormulaUpdateDto, Formula>()
+                .ForAllMembers(o => o.Condition(c => !c.IsSourceValueNull));
+
+            CreateMap<Formula, Formula>()
+                .ForMember(f => f.Id, opt => opt.Ignore())
+                .ForMember(f => f.Number, opt => opt.Ignore())
+                .ForMember(f => f.MajorVersion, opt => opt.Ignore())
+                .ForMember(f => f.MinorVersion, opt => opt.Ignore())
+                .ForMember(f => f.RevisionVersion, opt => opt.Ignore())
+                .ForMember(f => f.Status, opt => opt.Ignore())
+                .ForMember(f => f.ParentId, opt => opt.Ignore())
+                .ForMember(f => f.CreativeSystemNumber, opt => opt.Ignore())
+                .ForMember(f => f.PublishedOn, opt => opt.Ignore())
+                .ForMember(f => f.OwnedBy, opt => opt.Ignore())
+                .ForMember(f => f.CreatedBy, opt => opt.Ignore())
+                .ForMember(f => f.CreatedOn, opt => opt.Ignore())
+                .ForMember(f => f.UpdatedBy, opt => opt.Ignore())
+                .ForMember(f => f.UpdatedOn, opt => opt.Ignore())
+                .ForMember(f => f.Parent, opt => opt.Ignore());
+
+            CreateMap<Formula, FormulaDto>()
+                .ForMember(f => f.CopiedFrom, opt => opt.MapFrom(f => f.ParentId));
+
+            CreateMap<ManagerResult, FormulaManagerResult>();
+
+            CreateMap<IngredientCreateDto, Ingredient>()
+                .BeforeMap((s, d) => d.UpdatedOn = DateTime.UtcNow);
+
+            CreateMap<IngredientUpdateDto, Ingredient>()
+                .BeforeMap((s, d) => d.UpdatedOn = DateTime.UtcNow)
+                .ForMember(i => i.Id, opt => opt.Ignore())
+                .ForAllMembers(o => o.Condition(c => !c.IsSourceValueNull));
+
+            CreateMap<Ingredient, Ingredient>()
+                .BeforeMap((s, d) => d.UpdatedOn = DateTime.UtcNow)
+                .ForMember(i => i.Id, opt => opt.Ignore())
+                .ForMember(i => i.FormulaId, opt => opt.Ignore())
+                .ForMember(i => i.UpdatedBy, opt => opt.Ignore())
+                .ForMember(i => i.UpdatedOn, opt => opt.Ignore())
+                .ForMember(i => i.Formula, opt => opt.Ignore());
+            CreateMap<Ingredient, IngredientDto>();
+
+            CreateMap<IpcDto, Ingredient>()
+                .ForMember(i => i.Id, opt => opt.Ignore())
+                .ForMember(i => i.FormulaId, opt => opt.Ignore())
+                .ForMember(i => i.IpcNumber, opt => opt.Ignore())
+                .ForMember(i => i.Parts, opt => opt.Ignore())
+                .ForMember(i => i.Notes, opt => opt.Ignore())
+                .ForMember(i => i.UpdatedBy, opt => opt.Ignore())
+                .ForMember(i => i.UpdatedOn, opt => opt.Ignore())
+                .ForMember(i => i.Components, opt => opt.Ignore())
+                .ForMember(i => i.Formula, opt => opt.Ignore());
+
+            CreateMap<ManagerResult, IngredientManagerResult>();
+
+            CreateMap<UserSettings, UserSettingsDto>();
+            CreateMap<UserSettingsUpdateDto, UserSettings>()
+                .ForMember(upd => upd.ViewSettings, opt => opt.MapFrom(u => u.ViewSettings.ToString()))
+                .ForAllMembers(o => o.Condition(c => !c.IsSourceValueNull));
+
+            CreateMap<ManagerResult, SettingsManagerResult>();
+
+            CreateMap<AnalysisComponent, AnalysisComponent>()
+                .ForMember(ac => ac.Id, opt => opt.Ignore())
+                .ForMember(ac => ac.FormulaId, opt => opt.Ignore())
+                .ForMember(ac => ac.Formula, opt => opt.Ignore());
+            CreateMap<AnalysisComponent, AnalysisComponentDto>();
+            CreateMap<AnalysisComponent, IpcComponent>();
+            CreateMap<AnalysisComponent, IpcComponentDto>();
+
+            CreateMap<AnalysisComponentUpdateDto, AnalysisComponent>()
+                .ForMember(ac => ac.Id, opt => opt.Ignore())
+                .ForAllMembers(o => o.Condition(c => !c.IsSourceValueNull));
+
+            CreateMap<ManagerResult, AnalysisManagerResult>();
+
+            CreateMap<IpcComponent, IpcComponent>()
+                .ForMember(ic => ic.Id, opt => opt.Ignore())
+                .ForMember(ic => ic.IngredientId, opt => opt.Ignore())
+                .ForMember(ic => ic.Ingredient, opt => opt.Ignore());
+
+            CreateMap<ManagerResult, IpcManagerResult>();
+
+            CreateMap<ManagerResult, UserManagerResult>();
+        }
+    }
+}
+
+AfbContext.cs
+-----------------------
+using System.Data.Entity;
+using IFF.AFB.Entity;
+
+namespace IFF.AFB.Business
+{
+    public class AfbContext : DbContext
+    {
+        public AfbContext() : base("AfbContext")
+        {
+        }
+
+        public DbSet<Formula> Formulas { get; set; }
+
+        public DbSet<Ingredient> Ingredients { get; set; }
+
+        public DbSet<IpcComponent> IpcComponents { get; set; }
+
+        public DbSet<AnalysisComponent> AnalysisComponents { get; set; }
+
+        public DbSet<UserSettings> UserSettings { get; set; }
+
+        protected override void OnModelCreating(DbModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Formula>().ToTable("Formulas");
+        }
+    }
+}
+
+
+FormulaManager.cs
+-----------------------
+using System;
+using System.Collections.Generic;
+using System.Data.Entity;
+using System.Linq;
+using AutoMapper;
+using IFF.AFB.Business.BaseClasses;
+using IFF.AFB.Business.Contracts;
+using IFF.AFB.Entity;
+using IFF.AFB.Entity.BaseClasses;
+using IFF.AFB.Entity.Dtos;
+using IFF.AFB.ServiceReferences.Experiments;
+using Microsoft.Practices.Unity;
+
+namespace IFF.AFB.Business
+{
+    public class FormulaManager : BusinessObject, IFormulaManager
+    {
+         [Dependency]
+        public DbContext Db { get; set; }
+
+        [Dependency]
+        public IAnalysisManager AnalysisManager { get; set; }
+
+        [Dependency]
+        public ISettingsManager SettingsManager { get; set; }
+
+        [Dependency]
+        public IUserManager UserManager { get; set; }
+
+        [Dependency]
+        public IFormulaHelper FormulaHelper { get; set; }
+
+        [Dependency]
+        public IAnalysisHelper AnalysisHelper { get; set; }
+
+        [Dependency]
+        public IMapper Mapper { get; set; }
+
+        public List<FormulaDto> Get(List<string> userIds, string request, int run)
+        {
+            List<Formula> formulas;
+            List<FormulaDto> formulaDtos;
+            
+            var getUsersResult = UserManager.GetUsersByIds(userIds);            
+                        
+            var users = getUsersResult.IsSuccessful ? getUsersResult.Users : null;
+
+            if (request != null && run > 0)
+            {
+                formulas = Db.Set<Formula>().Where(f => f.Request == request && f.Run == run && f.Status != Status.Deleted).ToList();
+                formulaDtos = formulas.Select(formula => ConvertBasicFormulaToDto(formula, users)).ToList();
+            }
+            else
+            {   
+                formulas = Db.Set<Formula>().Where(f => userIds.Contains(f.OwnedBy) && f.Status != Status.Deleted).ToList();                    
+                formulaDtos = new List<FormulaDto>();
+
+                foreach (var formula in formulas)
+                 {
+                    var formulaDto = ConvertFormulaToDto(formula, users);
+                    formulaDtos.Add(formulaDto);
+                 } 
+            } 
+
+            return formulaDtos;
+        }
+
+        public List<FormulaDto> GetPaginatedFormulas(int pageSize, int pageIndex, List<string> userIds, string request, int run)
+        {
+            List<Formula> formulas;
+            List<FormulaDto> formulaDtos;
+            
+            var getUsersResult = UserManager.GetUsersByIds(userIds);            
+                        
+            var users = getUsersResult.IsSuccessful ? getUsersResult.Users : null;
+
+            if (request != null && run > 0)
+            {
+                formulas = Db.Set<Formula>().Where(f => f.Request == request && f.Run == run && f.Status != Status.Deleted)
+                           .OrderByDescending(f => f.CreatedOn)
+                           .Skip(() => pageIndex).Take(() => pageSize)
+                           .ToList();
+
+                formulaDtos = formulas.Select(formula => ConvertBasicFormulaToDto(formula, users)).ToList();
+            }
+            else
+            {   
+                formulas = Db.Set<Formula>().Where(f => userIds.Contains(f.OwnedBy) && f.Status != Status.Deleted)
+                          .OrderByDescending(f => f.CreatedOn)
+                          .Skip(() => pageIndex).Take(() => pageSize)
+                          .ToList();
+                                                                                            
+                formulaDtos = new List<FormulaDto>();
+
+                foreach (var formula in formulas)
+                 {
+                    var formulaDto = ConvertFormulaToDto(formula, users);
+                    formulaDtos.Add(formulaDto);
+                 } 
+            }
+
+            return formulaDtos;
+        }
+
+        public FormulaManagerResult Create(FormulaCreateDto createDto, string userId, ServiceParameters serviceParameters)
+        {
+            var analysis = AnalysisHelper.GetAnalysisFromSource(createDto.Request, createDto.Run, serviceParameters);
+
+            var result = ValidateCreateRequest(analysis, createDto.Request, createDto.Run);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            var formulaToCreate = Mapper.Map<AnalysisDto, Formula>(analysis);
+
+            PopulateFormulaFromSettings(userId, formulaToCreate);
+
+            formulaToCreate.Request = createDto.Request;
+            formulaToCreate.Run = createDto.Run;
+            formulaToCreate.Description = createDto.Description;
+            formulaToCreate.CreativeSystemNumber = createDto.CreativeSystemNumber;
+            formulaToCreate.CpaNumber = createDto.CpaNumber;
+            formulaToCreate.Status = Status.Active;
+            formulaToCreate.Notes = createDto.Notes;
+            formulaToCreate.OwnedBy = createDto.OwnedBy;
+            formulaToCreate.CreatedBy = userId;
+            formulaToCreate.UpdatedBy = userId;
+
+            Db.Set<Formula>().Add(formulaToCreate);
+
+            try
+            {
+                Db.SaveChanges();
+
+                formulaToCreate.Number = formulaToCreate.Id;
+
+                Db.SaveChanges();
+
+                return SaveSucceededResult(formulaToCreate);
+            }
+            catch (Exception e)
+            {
+                return CreateFormulaManagerResult(SaveFailedResult(e));
+            }
+        }
+
+        public FormulaManagerResult Copy(int id, string userId)
+        {
+            var result = FormulaHelper.Validate(id);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            var formulaToCopy = FormulaHelper.GetById(id);
+
+            var formulaToCreate = CloneFormula(formulaToCopy, userId, id, 0, 0, 0);
+            formulaToCreate.CpaNumber = string.Empty;
+
+            Db.Set<Formula>().Add(formulaToCreate);
+
+            try
+            {
+                Db.SaveChanges();
+
+                formulaToCreate.Number = formulaToCreate.Id;
+
+                Db.SaveChanges();
+
+                return SaveSucceededResult(formulaToCreate);
+            }
+            catch (Exception e)
+            {
+                return CreateFormulaManagerResult(SaveFailedResult(e));
+            }
+        }
+
+        public FormulaManagerResult Version(int id, string userId, bool isMajor, bool isMinor, bool isRevision)
+        {
+            var result = FormulaHelper.ValidateAndCheckAuthorization(id, userId);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            result = ValidateVersionRequest(isMajor, isMinor, isRevision);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            var formulaToVersion = FormulaHelper.GetById(id);
+            var majorVersion = formulaToVersion.MajorVersion;
+            var minorVersion = formulaToVersion.MinorVersion;
+            var revisionVersion = formulaToVersion.RevisionVersion;
+
+            if (isMajor)
+            {
+                majorVersion++;
+                minorVersion = 0;
+                revisionVersion = 0;
+            }
+            else if (isMinor)
+            {
+                minorVersion++;
+                revisionVersion = 0;
+            }
+            else if (isRevision)
+            {
+                revisionVersion++;
+            }
+
+            result = ValidateVersionNumber(formulaToVersion.Number, majorVersion, minorVersion, revisionVersion);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            var formulaToCreate = CloneFormula(formulaToVersion, userId, id, majorVersion, minorVersion, revisionVersion);
+            formulaToCreate.Number = formulaToVersion.Number;
+
+            Db.Set<Formula>().Add(formulaToCreate);
+
+            try
+            {
+                Db.SaveChanges();
+
+                return SaveSucceededResult(formulaToCreate);
+            }
+            catch (Exception e)
+            {
+                return CreateFormulaManagerResult(SaveFailedResult(e));
+            }
+        }
+
+        public FormulaManagerResult Update(int id, FormulaUpdateDto updateDto, string userId)
+        {
+            var result = FormulaHelper.ValidateAndCheckAuthorization(id, userId);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            var formulaToUpdate = FormulaHelper.GetById(id);
+
+            result = ValidateUpdateRequest(formulaToUpdate, updateDto);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            ModifyFormulaToUpdate(formulaToUpdate, updateDto);
+
+            return SaveModifiedFormula(formulaToUpdate, userId);
+        }
+
+        public FormulaManagerResult Delete(int id, string userId)
+        {
+            var result = FormulaHelper.ValidateAndCheckAuthorization(id, userId);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            var formulaToDelete = FormulaHelper.GetById(id);
+
+            result = ValidateDeleteRequest(formulaToDelete);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            formulaToDelete.Status = Status.Deleted;
+
+            return SaveModifiedFormula(formulaToDelete, userId);
+        }
+
+        public FormulaManagerResult Publish(int id, string userId)
+        {
+            var result = FormulaHelper.ValidateAndCheckAuthorization(id, userId);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            var formulaToPublish = FormulaHelper.GetById(id);
+
+            var updateDto = new FormulaUpdateDto { Published = true };
+            result = ValidateUpdateRequest(formulaToPublish, updateDto);
+            if (!result.IsSuccessful)
+            {
+                return CreateFormulaManagerResult(result);
+            }
+
+            if (formulaToPublish.Division == Division.Flavors)
+            {
+                var experimentId = PublishFlavorsFormula(formulaToPublish);
+
+                if (experimentId.HasValue)
+                {
+                    formulaToPublish.CreativeSystemNumber = experimentId.ToString();
+                    formulaToPublish.Status = Status.Published;
+
+                    var saveResult = SaveModifiedFormula(formulaToPublish, userId);
+
+                    return saveResult.IsSuccessful ? BuildSuccessfulResultForPublishedFlavorsFormula(experimentId) : CreateFormulaManagerResult(saveResult);
+                }
+            }
+            else if (formulaToPublish.Division == Division.Fragrances)
+            {
+                var formulaCsv = BuildFragrancesFormulaCsv(formulaToPublish);
+
+                formulaToPublish.Status = Status.Published;
+
+                var saveResult = SaveModifiedFormula(formulaToPublish, userId);
+
+                return saveResult.IsSuccessful ? BuildSuccessfulResultForPublishedFragrancesFormula(formulaCsv) : CreateFormulaManagerResult(saveResult);
+            }
+
+            return CreateFormulaManagerResult(BuildServerErrorResult(new Exception("Publish failed.")));
+        }
+
+        private static int? PublishFlavorsFormula(Formula formula)
+        {
+            var prodTypeCode = "EXPERIMENTAL";
+            var ipcSeries = "000";
+            var formulaNumber = BuildFormulaNumber(formula);
+            var bomItems = formula.Ingredients.Select(i => new BOMItem { IpcNumber = i.IpcNumber, Quantity = i.Parts }).ToArray();
+
+            var client = new ExperimentsServiceClient();
+            var uploadFormula = new UploadFormula
+            {
+                BomItems = bomItems,
+                Description = formula.Description,
+                FormulaNumber = formulaNumber,
+                RegisterFormula = false,
+                TotalQuantity = decimal.ToDouble(formula.Ingredients.Sum(i => i.Parts)),
+                UserId = formula.OwnedBy,
+                ProdTypeCode = prodTypeCode,
+                CostBookCode = formula.CostBook,
+                IPCSeries = ipcSeries,
+                Comment = string.Empty,
+                OdorType = string.Empty,
+                PerfumerNumber = string.Empty,
+                SpecItems = new SpecItem[] { }
+            };
+
+            var response = client.RegisterExperiment(uploadFormula);
+
+            return response.IsSuccessful ? (int?)response.ExperimentId : null;
+        }
+
+        private static string BuildFragrancesFormulaCsv(Formula formula)
+        {
+            var formulaNumber = BuildFormulaNumber(formula);
+
+            var header = @"""Formula Number"",""Description"",""IPC"",""Parts"",""Name""";
+            var bomItems = formula.Ingredients.Select(i => $@"""{formulaNumber}"",""{i.IpcDescription}"",""{i.IpcNumber}"",""{i.Parts}"",{formulaNumber}").ToList();
+
+            return header + Environment.NewLine + string.Join(Environment.NewLine, bomItems);
+        }
+
+        private static string BuildFormulaNumber(Formula formula)
+        {
+            return $"AFB {formula.Number}-{formula.MajorVersion}.{formula.MinorVersion}.{formula.RevisionVersion}";
+        }
+
+        private static ManagerResult ValidateCreateRequest(AnalysisDto analysis, string request, int run)
+        {
+            string errorMessage = null;
+
+            if (analysis == null)
+            {
+                errorMessage = $"Unable to retrieve analysis, please confirm that Request {request} Run {run} are correct.";
+            }
+            else if (analysis.Components == null || !analysis.Components.Any())
+            {
+                errorMessage = $"Request {request} Run {run} has no components.";
+            }
+            else
+            {
+                var duplicateUnitNumbers =
+                    analysis.Components.GroupBy(ac => ac.UnitNumber)
+                        .Where(grp => grp.Key.HasValue && grp.Count() > 1)
+                        .Select(grp => grp.Key.Value)
+                        .OrderBy(u => u)
+                        .ToList();
+
+                if (duplicateUnitNumbers.Any())
+                {
+                    var duplicateUnitNumbersMsg = string.Join(", ", duplicateUnitNumbers);
+                    errorMessage = $"Request {request} Run {run} has duplicate units: {duplicateUnitNumbersMsg}.";
+                }
+            }
+
+            return errorMessage == null ? SuccessfulResult() : BuildClientErrorResult($"Formula has not been created. {errorMessage}");
+        }
+
+        private static ManagerResult ValidateVersionRequest(bool isMajor, bool isMinor, bool isRevision)
+        {
+            var statusChangedCount = (isMajor ? 1 : 0) + (isMinor ? 1 : 0) + (isRevision ? 1 : 0);
+            if (statusChangedCount > 1)
+            {
+                return BuildClientErrorResult("For major, minor, and revision, only one field can be set to true");
+            }
+
+            return SuccessfulResult();
+        }
+
+        private static ManagerResult ValidateUpdateRequest(Formula formulaToUpdate, FormulaUpdateDto updateDto)
+        {
+            var statusChangedCount = (updateDto.Active ? 1 : 0) + (updateDto.Completed ? 1 : 0) + (updateDto.Published ? 1 : 0) + (updateDto.Abandoned ? 1 : 0);
+            if (statusChangedCount > 1)
+            {
+                return BuildClientErrorResult("Only one status field can be set to true");
+            }
+
+            switch (formulaToUpdate.Status)
+            {
+                case Status.Published:
+                {
+                    if (formulaToUpdate.Division != Division.Fragrances)
+                    {
+                        return BuildClientErrorResultForPublishedFormulas();
+                    }
+
+                    if (updateDto.CreativeSystemNumber == null || formulaToUpdate.CreativeSystemNumber == updateDto.CreativeSystemNumber)
+                    {
+                        return BuildClientErrorResultForPublishedFormulas();
+                    }
+
+                    return SuccessfulResult();
+                }
+
+                case Status.Abandoned:
+                {
+                    if (updateDto.Completed || updateDto.Published)
+                    {
+                        return BuildClientErrorResult("Formula is abandoned, it cannot be completed or published");
+                    }
+
+                    return SuccessfulResult();
+                }
+
+                case Status.Deleted:
+                {
+                    return BuildClientErrorResult("Formula has been deleted, formula data cannot be changed");
+                }
+
+                default:
+                {
+                    return SuccessfulResult();
+                }
+            }
+        }
+
+        private static ManagerResult ValidateDeleteRequest(Formula formulaToDelete)
+        {
+            switch (formulaToDelete.Status)
+            {
+                case Status.Published:
+                {
+                    return BuildClientErrorResultForPublishedFormulas();
+                }
+
+                case Status.Deleted:
+                {
+                    return BuildClientErrorResult("Formula has already been deleted");
+                }
+
+                default:
+                {
+                    return SuccessfulResult();
+                }
+            }
+        }
+
+        private static void PopulateDisplayNamesForFormula(FormulaDto formulaDto, List<UserDto> users)
+        {
+            if (users != null)
+            {  
+                formulaDto.OwnedByDisplayName = users.Single(u => u.UserId == formulaDto.OwnedBy).DisplayName;
+                formulaDto.CreatedByDisplayName = users.Single(u => u.UserId == formulaDto.CreatedBy).DisplayName;
+            }
+        }
+
+        private static ManagerResult BuildClientErrorResultForPublishedFormulas()
+        {
+            return BuildClientErrorResult("Formula is published, it cannot be changed");
+        }
+
+        private FormulaManagerResult BuildSuccessfulResultForPublishedFlavorsFormula(int? experimentId)
+        {
+            var publishResult = CreateFormulaManagerResult(SuccessfulResult());
+
+            var formulaPublishDto = new FormulaPublishDto
+            {
+                IsResultExperimentId = true,
+                Result = experimentId.ToString()
+            };
+
+            publishResult.FormulaPublishDto = formulaPublishDto;
+
+            return publishResult;
+        }
+
+        private FormulaManagerResult BuildSuccessfulResultForPublishedFragrancesFormula(string formulaCsv)
+        {
+            var publishResult = CreateFormulaManagerResult(SuccessfulResult());
+
+            var formulaPublishDto = new FormulaPublishDto
+            {
+                IsResultCsv = true,
+                Result = formulaCsv
+            };
+
+            publishResult.FormulaPublishDto = formulaPublishDto;
+
+            return publishResult;
+        }
+
+        private FormulaManagerResult SaveSucceededResult(Formula formula = null)
+        {
+            var result = CreateFormulaManagerResult(SuccessfulResult());
+
+            if (formula != null)
+            {
+                var formulaDto = ConvertFormulaToDto(formula);
+                result.Formula = formulaDto;
+            }
+
+            return result;
+        }
+
+        private void PopulateFormulaFromSettings(string userId, Formula formula)
+        {
+            var result = SettingsManager.Get(userId);
+
+            if (result.IsSuccessful)
+            {
+                var userSettings = result.UserSettings;
+
+                formula.CostBook = userSettings.CostBook;
+                formula.Currency = userSettings.Currency;
+            }
+        }
+
+        private void ModifyFormulaToUpdate(Formula formulaToUpdate, FormulaUpdateDto updateDto)
+        {
+            if (formulaToUpdate.Division == Division.Fragrances && formulaToUpdate.Status == Status.Published)
+            {
+                formulaToUpdate.CreativeSystemNumber = updateDto.CreativeSystemNumber;
+
+                return;
+            }
+
+            Mapper.Map(updateDto, formulaToUpdate);
+
+            if (updateDto.Active)
+            {
+                formulaToUpdate.Status = Status.Active;
+            }
+
+            if (updateDto.Completed)
+            {
+                formulaToUpdate.Status = Status.Completed;
+            }
+
+            if (updateDto.Published)
+            {
+                formulaToUpdate.PublishedOn = DateTime.UtcNow;
+                formulaToUpdate.Status = Status.Published;
+            }
+
+            if (updateDto.Abandoned)
+            {
+                formulaToUpdate.Status = Status.Abandoned;
+            }
+        }
+
+        private FormulaDto ConvertFormulaToDto(Formula formula, List<UserDto> users = null)
+        {
+            var formulaDto = Mapper.Map<Formula, FormulaDto>(formula);         
+           
+            var childFormula = Db.Set<Formula>()
+                .Where(f => f.ParentId == formula.Id && f.Status != Status.Deleted)
+                .OrderByDescending(f => f.CreatedOn)
+                .FirstOrDefault();
+            if (childFormula != null)
+            {
+                formulaDto.CopiedTo = childFormula.Id.ToString();
+            }
+
+            PopulateDisplayNamesForFormula(formulaDto, users);            
+            formulaDto.MatchPercentage = CalculateMatchPercentage(formula);                        
+            
+            return formulaDto;
+        }
+        
+        private FormulaDto ConvertBasicFormulaToDto(Formula formula, List<UserDto> users = null)
+        {
+            var formulaDto = Mapper.Map<Formula, FormulaDto>(formula);
+
+            PopulateDisplayNamesForFormula(formulaDto, users);
+
+            return formulaDto;
+        }
+
+        private decimal CalculateMatchPercentage(Formula formula)
+        {
+            var analysisComponents = AnalysisManager.GetComponents(formula.Id);
+            var totalParts = analysisComponents.Sum(ac => ac.Parts);
+            if (totalParts == 0)
+            {
+                return 0;
+            }
+
+            var usedParts = AnalysisHelper.CalculateUsedParts(formula.Id);
+            var totalUsedParts = usedParts.Where(up => up.AnalysisComponentId.HasValue).Sum(up => up.UsedParts);
+
+            return totalUsedParts / totalParts * 100;
+        }
+        
+        private Formula CloneFormula(Formula formulaToCopy, string userId, int parentId, int majorVersion, int minorVersion, int revisionVersion)
+        {
+            var now = DateTime.UtcNow;
+
+            var copiedFormula = Mapper.Map<Formula, Formula>(formulaToCopy);
+
+            copiedFormula.ParentId = parentId;
+            copiedFormula.MajorVersion = majorVersion;
+            copiedFormula.MinorVersion = minorVersion;
+            copiedFormula.RevisionVersion = revisionVersion;
+            copiedFormula.Status = Status.Active;
+            copiedFormula.OwnedBy = userId;
+            copiedFormula.CreatedBy = userId;
+            copiedFormula.CreatedOn = now;
+            copiedFormula.UpdatedBy = userId;
+            copiedFormula.UpdatedOn = now;
+
+            copiedFormula.Ingredients.ForEach(i => i.UpdatedBy = userId);
+
+            return copiedFormula;
+        }
+
+        private ManagerResult ValidateVersionNumber(int number, int major, int minor, int revision)
+        {
+            var formulaVersion = FormulaHelper.GetByNumber(number, major, minor, revision);
+
+            if (formulaVersion != null)
+            {
+                return BuildClientErrorResult($"Formula {number} {major}.{minor}.{revision} already exists with id {formulaVersion.Id}");
+            }
+
+            return SuccessfulResult();
+        }
+
+        private FormulaManagerResult SaveModifiedFormula(Formula modifiedFormula, string userId)
+        {
+            modifiedFormula.UpdatedBy = userId;
+            modifiedFormula.UpdatedOn = DateTime.UtcNow;
+
+            Db.Entry(modifiedFormula).State = EntityState.Modified;
+
+            try
+            {
+                Db.SaveChanges();
+                return SaveSucceededResult(modifiedFormula);
+            }
+            catch (Exception e)
+            {
+                return CreateFormulaManagerResult(SaveFailedResult(e));
+            }
+        }
+
+        private FormulaManagerResult CreateFormulaManagerResult(ManagerResult managerResult)
+        {
+            if (managerResult == null)
+            {
+                return null;
+            }
+
+            return Mapper.Map<ManagerResult, FormulaManagerResult>(managerResult);
+        }
+    }
+}
+
+IV.API Project
+= = = = = = = = =
+
+App_Start/MapperConfig.cs
+---------------------------
+using AutoMapper;
+using IFF.AFB.Business.MapperProfiles;
+
+namespace IFF.AFB.Api
+{
+    public static class MapperConfig
+    {
+        public static MapperConfiguration MapperConfiguration()
+        {
+            return new MapperConfiguration(config =>
+            {
+                config.AddProfile(new AfbMapperProfile());
+            });
+        }
+    }
+}
+
+App_Start/SwaggerConfig.cs
+---------------------------------
+using System;
+using System.Configuration;
+using System.Web.Http;
+using IFF.AFB.Api;
+using Swashbuckle.Application;
+using WebActivatorEx;
+
+[assembly: PreApplicationStartMethod(typeof(SwaggerConfig), "Register")]
+
+namespace IFF.AFB.Api
+{
+    public class SwaggerConfig
+    {
+        public static void Register()
+        {
+            var thisAssembly = typeof(SwaggerConfig).Assembly;
+
+            GlobalConfiguration.Configuration 
+                .EnableSwagger(c =>
+                    {
+                        // By default, the service root url is inferred from the request used to access the docs.
+                        // However, there may be situations (e.g. proxy and load-balanced environments) where this does not
+                        // resolve correctly. You can workaround this by providing your own code to determine the root URL.
+                        c.RootUrl(req => GetRootUrl());
+
+                        // If schemes are not explicitly provided in a Swagger 2.0 document, then the scheme used to access
+                        // the docs is taken as the default. If your API supports multiple schemes and you want to be explicit
+                        // about them, you can use the "Schemes" option as shown below.
+                        //
+                        ////c.Schemes(new[] { "http", "https" });
+
+                        // Use "SingleApiVersion" to describe a single version API. Swagger 2.0 includes an "Info" object to
+                        // hold additional metadata for an API. Version and title are required but you can also provide
+                        // additional fields by chaining methods off SingleApiVersion.
+                        c.SingleApiVersion("v1", "IFF.AFB.Api");
+
+                        // If your API has multiple versions, use "MultipleApiVersions" instead of "SingleApiVersion".
+                        // In this case, you must provide a lambda that tells Swashbuckle which actions should be
+                        // included in the docs for a given API version. Like "SingleApiVersion", each call to "Version"
+                        // returns an "Info" builder so you can provide additional metadata per API version.
+                        //
+                        ////c.MultipleApiVersions(
+                        //    (apiDesc, targetApiVersion) => ResolveVersionSupportByRouteConstraint(apiDesc, targetApiVersion),
+                        //    (vc) =>
+                        //    {
+                        //        vc.Version("v2", "Swashbuckle Dummy API V2");
+                        //        vc.Version("v1", "Swashbuckle Dummy API V1");
+                        //    });
+
+                        // You can use "BasicAuth", "ApiKey" or "OAuth2" options to describe security schemes for the API.
+                        // See https://github.com/swagger-api/swagger-spec/blob/master/versions/2.0.md for more details.
+                        // NOTE: These only define the schemes and need to be coupled with a corresponding "security" property
+                        // at the document or operation level to indicate which schemes are required for an operation. To do this,
+                        // you'll need to implement a custom IDocumentFilter and/or IOperationFilter to set these properties
+                        // according to your specific authorization implementation
+                        //
+                        ////c.BasicAuth("basic")
+                        //    .Description("Basic HTTP Authentication");
+                        //
+                        ////c.ApiKey("apiKey")
+                        //    .Description("API Key Authentication")
+                        //    .Name("apiKey")
+                        //    .In("header");
+                        //
+                        ////c.OAuth2("oauth2")
+                        //    .Description("OAuth2 Implicit Grant")
+                        //    .Flow("implicit")
+                        //    .AuthorizationUrl("http://petstore.swagger.wordnik.com/api/oauth/dialog")
+                        //    //.TokenUrl("https://tempuri.org/token")
+                        //    .Scopes(scopes =>
+                        //    {
+                        //        scopes.Add("read", "Read access to protected resources");
+                        //        scopes.Add("write", "Write access to protected resources");
+                        //    });
+
+                        // Set this flag to omit descriptions for any actions decorated with the Obsolete attribute
+                        ////c.IgnoreObsoleteActions();
+
+                        // Each operation be assigned one or more tags which are then used by consumers for various reasons.
+                        // For example, the swagger-ui groups operations according to the first tag of each operation.
+                        // By default, this will be controller name but you can use the "GroupActionsBy" option to
+                        // override with any value.
+                        //
+                        ////c.GroupActionsBy(apiDesc => apiDesc.HttpMethod.ToString());
+
+                        // You can also specify a custom sort order for groups (as defined by "GroupActionsBy") to dictate
+                        // the order in which operations are listed. For example, if the default grouping is in place
+                        // (controller name) and you specify a descending alphabetic sort order, then actions from a
+                        // ProductsController will be listed before those from a CustomersController. This is typically
+                        // used to customize the order of groupings in the swagger-ui.
+                        //
+                        ////c.OrderActionGroupsBy(new DescendingAlphabeticComparer());
+
+                        // If you annotate Controllers and API Types with
+                        // Xml comments (http://msdn.microsoft.com/en-us/library/b2s063f7(v=vs.110).aspx), you can incorporate
+                        // those comments into the generated docs and UI. You can enable this by providing the path to one or
+                        // more Xml comment files.
+                        c.IncludeXmlComments(GetXmlCommentsPath());
+
+                        // Swashbuckle makes a best attempt at generating Swagger compliant JSON schemas for the various types
+                        // exposed in your API. However, there may be occasions when more control of the output is needed.
+                        // This is supported through the "MapType" and "SchemaFilter" options:
+                        //
+                        // Use the "MapType" option to override the Schema generation for a specific type.
+                        // It should be noted that the resulting Schema will be placed "inline" for any applicable Operations.
+                        // While Swagger 2.0 supports inline definitions for "all" Schema types, the swagger-ui tool does not.
+                        // It expects "complex" Schemas to be defined separately and referenced. For this reason, you should only
+                        // use the "MapType" option when the resulting Schema is a primitive or array type. If you need to alter a
+                        // complex Schema, use a Schema filter.
+                        //
+                        ////c.MapType<ProductType>(() => new Schema { type = "integer", format = "int32" });
+
+                        // If you want to post-modify "complex" Schemas once they've been generated, across the board or for a
+                        // specific type, you can wire up one or more Schema filters.
+                        //
+                        ////c.SchemaFilter<ApplySchemaVendorExtensions>();
+
+                        // In a Swagger 2.0 document, complex types are typically declared globally and referenced by unique
+                        // Schema Id. By default, Swashbuckle does NOT use the full type name in Schema Ids. In most cases, this
+                        // works well because it prevents the "implementation detail" of type namespaces from leaking into your
+                        // Swagger docs and UI. However, if you have multiple types in your API with the same class name, you'll
+                        // need to opt out of this behavior to avoid Schema Id conflicts.
+                        //
+                        ////c.UseFullTypeNameInSchemaIds();
+
+                        // Alternatively, you can provide your own custom strategy for inferring SchemaId's for
+                        // describing "complex" types in your API.
+                        //  
+                        ////c.SchemaId(t => t.FullName.Contains('`') ? t.FullName.Substring(0, t.FullName.IndexOf('`')) : t.FullName);
+
+                        // Set this flag to omit schema property descriptions for any type properties decorated with the
+                        // Obsolete attribute 
+                        ////c.IgnoreObsoleteProperties();
+
+                        // In accordance with the built in JsonSerializer, Swashbuckle will, by default, describe enums as integers.
+                        // You can change the serializer behavior by configuring the StringToEnumConverter globally or for a given
+                        // enum type. Swashbuckle will honor this change out-of-the-box. However, if you use a different
+                        // approach to serialize enums as strings, you can also force Swashbuckle to describe them as strings.
+                        // 
+                        ////c.DescribeAllEnumsAsStrings();
+
+                        // Similar to Schema filters, Swashbuckle also supports Operation and Document filters:
+                        //
+                        // Post-modify Operation descriptions once they've been generated by wiring up one or more
+                        // Operation filters.
+                        //
+                        ////c.OperationFilter<AddDefaultResponse>();
+                        //
+                        // If you've defined an OAuth2 flow as described above, you could use a custom filter
+                        // to inspect some attribute on each action and infer which (if any) OAuth2 scopes are required
+                        // to execute the operation
+                        //
+                        ////c.OperationFilter<AssignOAuth2SecurityRequirements>();
+
+                        // Post-modify the entire Swagger document by wiring up one or more Document filters.
+                        // This gives full control to modify the final SwaggerDocument. You should have a good understanding of
+                        // the Swagger 2.0 spec. - https://github.com/swagger-api/swagger-spec/blob/master/versions/2.0.md
+                        // before using this option.
+                        //
+                        ////c.DocumentFilter<ApplyDocumentVendorExtensions>();
+
+                        // In contrast to WebApi, Swagger 2.0 does not include the query string component when mapping a URL
+                        // to an action. As a result, Swashbuckle will raise an exception if it encounters multiple actions
+                        // with the same path (sans query string) and HTTP method. You can workaround this by providing a
+                        // custom strategy to pick a winner or merge the descriptions for the purposes of the Swagger docs 
+                        //
+                        ////c.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
+
+                        // Wrap the default SwaggerGenerator with additional behavior (e.g. caching) or provide an
+                        // alternative implementation for ISwaggerProvider with the CustomProvider option.
+                        //
+                        ////c.CustomProvider((defaultProvider) => new CachingSwaggerProvider(defaultProvider));
+                    })
+                .EnableSwaggerUi(c =>
+                    {
+                        // Use the "InjectStylesheet" option to enrich the UI with one or more additional CSS stylesheets.
+                        // The file must be included in your project as an "Embedded Resource", and then the resource's
+                        // "Logical Name" is passed to the method as shown below.
+                        //
+                        ////c.InjectStylesheet(containingAssembly, "Swashbuckle.Dummy.SwaggerExtensions.testStyles1.css");
+
+                        // Use the "InjectJavaScript" option to invoke one or more custom JavaScripts after the swagger-ui
+                        // has loaded. The file must be included in your project as an "Embedded Resource", and then the resource's
+                        // "Logical Name" is passed to the method as shown above.
+                        //
+                        ////c.InjectJavaScript(thisAssembly, "Swashbuckle.Dummy.SwaggerExtensions.testScript1.js");
+
+                        // The swagger-ui renders boolean data types as a dropdown. By default, it provides "true" and "false"
+                        // strings as the possible choices. You can use this option to change these to something else,
+                        // for example 0 and 1.
+                        //
+                        ////c.BooleanValues(new[] { "0", "1" });
+
+                        // By default, swagger-ui will validate specs against swagger.io's online validator and display the result
+                        // in a badge at the bottom of the page. Use these options to set a different validator URL or to disable the
+                        // feature entirely.
+                        ////c.SetValidatorUrl("http://localhost/validator");
+                        c.DisableValidator();
+
+                        // Use this option to control how the Operation listing is displayed.
+                        // It can be set to "None" (default), "List" (shows operations for each resource),
+                        // or "Full" (fully expanded: shows operations and their details).
+                        //
+                        ////c.DocExpansion(DocExpansion.List);
+
+                        // Use the CustomAsset option to provide your own version of assets used in the swagger-ui.
+                        // It's typically used to instruct Swashbuckle to return your version instead of the default
+                        // when a request is made for "index.html". As with all custom content, the file must be included
+                        // in your project as an "Embedded Resource", and then the resource's "Logical Name" is passed to
+                        // the method as shown below.
+                        //
+                        ////c.CustomAsset("index", containingAssembly, "YourWebApiProject.SwaggerExtensions.index.html");
+
+                        // If your API has multiple versions and you've applied the MultipleApiVersions setting
+                        // as described above, you can also enable a select box in the swagger-ui, that displays
+                        // a discovery URL for each version. This provides a convenient way for users to browse documentation
+                        // for different API versions.
+                        //
+                        ////c.EnableDiscoveryUrlSelector();
+
+                        // If your API supports the OAuth2 Implicit flow, and you've described it correctly, according to
+                        // the Swagger 2.0 specification, you can enable UI support as shown below.
+                        //
+                        ////c.EnableOAuth2Support("test-client-id", "test-realm", "Swagger UI");
+                    });
+        }
+
+        private static string GetRootUrl()
+        {
+            return ConfigurationManager.AppSettings["ApiRootUrl"];
+        }
+
+        private static string GetXmlCommentsPath()
+        {
+            return $@"{AppDomain.CurrentDomain.BaseDirectory}\bin\documentation.xml";
+        }
+    }
+}
+
+
+App_Start\WebAPIConfig.cs
+------------------------------
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web.Http;
+using log4net.Config;
+
+namespace IFF.AFB.Api
+{
+    public static class WebApiConfig
+    {
+        public static void Register(HttpConfiguration config)
+        {
+            // Web API configuration and services
+
+            // Web API routes
+            config.MapHttpAttributeRoutes();
+            
+            // Log4net
+            XmlConfigurator.Configure();
+
+            config.Routes.MapHttpRoute(
+                name: "DefaultApi",
+                routeTemplate: "api/{controller}/{id}",
+                defaults: new { id = RouteParameter.Optional });            
+        }
+    }
+}
+
+App_Start/UnityConfig.cs
+------------------------------
+using System.Data.Entity;
+using System.Web.Http;
+using AutoMapper;
+using IFF.AFB.Business;
+using IFF.AFB.Business.Contracts;
+using Microsoft.Practices.Unity;
+using Unity.WebApi;
+
+namespace IFF.AFB.Api
+{
+    public static class UnityConfig
+    {
+        public static void RegisterComponents()
+        {
+            var container = new UnityContainer();
+
+            container.RegisterType<IMapper>(
+                new HierarchicalLifetimeManager(),
+                new InjectionFactory(c => MapperConfig.MapperConfiguration().CreateMapper()));
+
+            container.RegisterType<DbContext, AfbContext>(new HierarchicalLifetimeManager());
+
+            container.RegisterType<IFormulaManager, FormulaManager>(new HierarchicalLifetimeManager());
+            container.RegisterType<IFormulaHelper, FormulaHelper>(new HierarchicalLifetimeManager());
+            container.RegisterType<IAnalysisManager, AnalysisManager>(new HierarchicalLifetimeManager());
+            container.RegisterType<IAnalysisHelper, AnalysisHelper>(new HierarchicalLifetimeManager());
+            container.RegisterType<IIngredientManager, IngredientManager>(new HierarchicalLifetimeManager());
+            container.RegisterType<IIngredientHelper, IngredientHelper>(new HierarchicalLifetimeManager());
+            container.RegisterType<IIpcManager, IpcManager>(new HierarchicalLifetimeManager());
+            container.RegisterType<ISettingsManager, SettingsManager>(new HierarchicalLifetimeManager());
+            container.RegisterType<IUserManager, UserManager>(new HierarchicalLifetimeManager());
+
+            GlobalConfiguration.Configuration.DependencyResolver = new UnityDependencyResolver(container);
+        }
+    }
+}
+
+Common\ConfigurationHelper.cs
+----------------------------------
+using System.Configuration;
+using IFF.AFB.Entity;
+
+namespace IFF.AFB.Api.Common
+{
+    public static class ConfigurationHelper
+    {
+        public static ServiceParameters GetServiceParameters()
+        {
+            var serviceParameters = new ServiceParameters
+            {
+                AnalysesServiceUrl = ConfigurationManager.AppSettings["AnalysesServiceUrl"],
+                OccurrencesServiceUrl = ConfigurationManager.AppSettings["OccurrencesServiceUrl"],
+                IpcsServiceUrl = ConfigurationManager.AppSettings["IpcsServiceUrl"],
+                IpcsSearchServiceUrl = ConfigurationManager.AppSettings["IpcsSearchServiceUrl"],
+                UsersServiceUrl = ConfigurationManager.AppSettings["UsersServiceUrl"],
+                ServiceUsername = ConfigurationManager.AppSettings["ServiceUsername"],
+                ServicePassword = ConfigurationManager.AppSettings["ServicePassword"]
+            };
+
+            return serviceParameters;
+        }
+    }
+}
+
+Common\CustomAuthorizeAttribute.cs
+----------------------------------------
+using System.Configuration;
+using System.Net;
+using System.Net.Http;
+using System.Web.Http;
+using System.Web.Http.Controllers;
+
+namespace IFF.AFB.Api.Common
+{
+    /// <summary>
+    /// Custom attribute for checking authorization to API
+    /// </summary>
+    public class CustomAuthorizeAttribute : AuthorizeAttribute
+    {
+        protected override bool IsAuthorized(HttpActionContext actionContext)
+        {
+            var authorizedEditorsGroup = ConfigurationManager.AppSettings["AuthorizedEditorsGroup"];
+            var isInEditorRole = actionContext.RequestContext.Principal.IsInRole(authorizedEditorsGroup);
+
+            return isInEditorRole;
+        }
+
+        protected override void HandleUnauthorizedRequest(HttpActionContext actionContext)
+        {
+            if (!actionContext.RequestContext.Principal.Identity.IsAuthenticated)
+            {
+                base.HandleUnauthorizedRequest(actionContext);
+            }
+            else
+            {
+                actionContext.Response = new HttpResponseMessage(HttpStatusCode.Forbidden);
+            }
+        }
+    }
+}
+
+Controllers\FormulasController.cs
+-------------------------------------
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Web.Http;
+using IFF.AFB.Api.Common;
+using IFF.AFB.Business.Contracts;
+using IFF.AFB.Common;
+using IFF.AFB.Entity;
+using IFF.AFB.Entity.BaseClasses;
+using IFF.AFB.Entity.Dtos;
+using Microsoft.Practices.Unity;
+
+namespace IFF.AFB.Api.Controllers
+{
+    [CustomAuthorize]
+    public class FormulasController : ApiController
+    {   
+        private Logger logger = Logger.Instance;
+        
+        [Dependency]
+        public IFormulaManager FormulaManager { get; set; }
+
+        [Dependency]
+        public IAnalysisManager AnalysisManager { get; set; }
+
+        [Dependency]
+        public IIngredientManager IngredientManager { get; set; }
+
+        [Dependency]
+        public IIpcManager IpcManager { get; set; }
+      
+        /// <summary>
+        /// Gets formulas for the current or specified users
+        /// </summary>
+        /// <param name="userIds">
+        /// A comma-delimited list of user IDs. When specified, formulas created or owned by these users will be returned.
+        /// When unspecified, the formulas for the current user will be returned.
+        /// </param>
+        /// <param name="request">
+        /// Analysis request number.
+        /// </param>
+        /// <param name="run">
+        /// Analysis run number.
+        /// </param>
+        /// <param name="pageSize">
+        /// Page Size.
+        /// </param>
+        /// <param name="pageIndex">
+        /// Page Index.
+        /// </param>
+        [Route("formulas")]
+        [HttpGet]
+        public IHttpActionResult GetFormulas(string userIds = null, string request = null, int run = 0)
+        {   
+            logger.LogStart("Get Formulas");
+            var userIdsToGet = userIds?.Split(',').ToList() ?? new List<string> { DetermineUserId() };
+            var formulas = FormulaManager.Get(userIdsToGet, request, run);
+            logger.LogEnd("Get Formulas");            
+            return Ok(formulas);
+        }
+
+        [Route("formulasWithPagination")]
+        [HttpGet]
+        public IHttpActionResult GetFormulas(int pageSize, int pageIndex, string userIds = null, string request = null, int run = 0)
+        {   
+            logger.LogStart("Get Formulas");
+            var userIdsToGet = userIds?.Split(',').ToList() ?? new List<string> { DetermineUserId() };
+            var formulas = FormulaManager.GetPaginatedFormulas(pageSize, pageIndex, userIdsToGet, request, run);
+            logger.LogEnd("Get Formulas");            
+            return Ok(formulas);
+        }
+
+        /// <summary>
+        /// Creates a formula
+        /// </summary>
+        [Route("formulas")]
+        [HttpPost]
+        public IHttpActionResult Create([FromBody] FormulaCreateDto createDto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+            var serviceParameters = GetServiceParameters();
+
+            var result = FormulaManager.Create(createDto, userId, serviceParameters);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Created("/formulas/" + result.Formula.Id, result.Formula);
+        }
+
+        /// <summary>
+        /// Copies a formula
+        /// </summary>
+        [Route("formulas/{id}/copy")]
+        [HttpPost]
+        public IHttpActionResult Copy(int id)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+
+            var result = FormulaManager.Copy(id, userId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Created("/formulas/" + result.Formula.Id, result.Formula);
+        }
+
+        /// <summary>
+        /// Versions a formula
+        /// </summary>
+        /// <param name="id">The ID of the formula.</param>
+        /// <param name="major">
+        /// Set to true to create a major version of the formula. When set, minor and revision must not be set.
+        /// </param>
+        /// <param name="minor">
+        /// Set to true to create a minor version of the formula. When set, major and revision must not be set.
+        /// </param>
+        /// <param name="revision">
+        /// Set to true to create a revision version of the formula. When set, major and minor must not be set.
+        /// </param>
+        [Route("formulas/{id}/version")]
+        [HttpPost]
+        public IHttpActionResult Version(int id, bool major = false, bool minor = false, bool revision = false)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+
+            var result = FormulaManager.Version(id, userId, major, minor, revision);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Created("/formulas/" + result.Formula.Id, result.Formula);
+        }
+
+        /// <summary>
+        /// Updates a formula
+        /// </summary>
+        /// <param name="id">The ID of the formula.</param>
+        /// <param name="formulaData">
+        /// All fields are optional, any fields that are not set will remained unchanged.<br /><br />
+        /// Set active, completed, published, or abandoned to true to update the status of the formula. Only one status field can be set to true.
+        /// </param>
+        [Route("formulas/{id}")]
+        [HttpPatch]
+        public IHttpActionResult Update(int id, [FromBody] FormulaUpdateDto formulaData)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+
+            var result = FormulaManager.Update(id, formulaData, userId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok(result.Formula);
+        }
+
+        /// <summary>
+        /// Deletes a formula
+        /// </summary>
+        [Route("formulas/{id}")]
+        [HttpDelete]
+        public IHttpActionResult Delete(int id)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+
+            var result = FormulaManager.Delete(id, userId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok(result.Formula);
+        }
+
+        /// <summary>
+        /// Publishes a formula
+        /// </summary>
+        /// <param name="formulaId">The ID of the formula.</param>
+        [Route("formulas/{formulaId}/publish")]
+        [HttpPut]
+        public IHttpActionResult Publish(int formulaId)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+
+            var result = FormulaManager.Publish(formulaId, userId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok(result.FormulaPublishDto);
+        }
+
+        /// <summary>
+        /// Gets analysis components
+        /// </summary>
+        [Route("formulas/{formulaId}/analysisComponents")]
+        [HttpGet]
+        public IHttpActionResult GetAnalysisComponents(int formulaId)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            
+            var analysisComponents = AnalysisManager.GetComponents(formulaId);
+
+            return Ok(analysisComponents);
+        }
+
+        /// <summary>
+        /// Update analysis components
+        /// </summary>
+        /// <param name="formulaId">The ID of the formula.</param>
+        /// <param name="analysisComponentData">
+        /// Accepts an array of analysis component data objects.<br /><br />
+        /// Only id is required. All other fields are optional, any fields that are not set will remained unchanged.
+        /// </param>
+        [Route("formulas/{formulaId}/analysisComponents")]
+        [HttpPatch]
+        public IHttpActionResult UpdateAnalysisComponents(int formulaId, [FromBody] List<AnalysisComponentUpdateDto> analysisComponentData)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+
+            var result = AnalysisManager.UpdateComponents(formulaId, analysisComponentData, userId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok();
+        }
+
+        /// <summary>
+        /// Gets occurrence data for analysis components
+        /// </summary>
+        [Route("formulas/{formulaId}/analysisComponents/occurrences")]
+        [HttpGet]
+        public IHttpActionResult GetAnalysisComponentOccurrences(int formulaId, [FromUri(Name = "")] IpcFilterDto ipcFilter)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var serviceParameters = GetServiceParameters();
+
+            var result = IpcManager.GetOccurrences(formulaId, ipcFilter, serviceParameters);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok(result.AnalysisComponentOccurrencesDtos);
+        }
+
+        /// <summary>
+        /// Gets used parts for analysis components
+        /// </summary>
+        [Route("formulas/{formulaId}/analysisComponents/usedParts")]
+        [HttpGet]
+        public IHttpActionResult GetAnalysisComponentUsedParts(int formulaId)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var result = AnalysisManager.GetUsedPartsForAnalysisComponents(formulaId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok(result.AnalysisComponentUsedPartsDtos);
+        }
+
+        /// <summary>
+        /// Gets ingredients
+        /// </summary>
+        [Route("formulas/{formulaId}/ingredients")]
+        [HttpGet]
+        public IHttpActionResult GetIngredients(int formulaId)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var result = IngredientManager.Get(formulaId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok(result.Ingredients);
+        }
+
+        /// <summary>
+        /// Creates an ingredient
+        /// </summary>
+        [Route("formulas/{formulaId}/ingredients")]
+        [HttpPost]
+        public IHttpActionResult CreateIngredient(int formulaId, [FromBody] IngredientCreateDto ingredientData)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+            var serviceParameters = GetServiceParameters();
+
+            var result = IngredientManager.Create(formulaId, ingredientData, userId, serviceParameters);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Created($"/formulas/{formulaId}/ingredients", result.Ingredient);
+        }
+
+        /// <summary>
+        /// Update ingredients
+        /// </summary>
+        /// <param name="formulaId">The ID of the formula.</param>
+        /// <param name="ingredientData">
+        /// Accepts an array of ingredient data objects.<br /><br />
+        /// Only id is required. All other fields are optional, any fields that are not set will remained unchanged.
+        /// </param>
+        [Route("formulas/{formulaId}/ingredients")]
+        [HttpPatch]
+        public IHttpActionResult UpdateIngredients(int formulaId, [FromBody] List<IngredientUpdateDto> ingredientData)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+
+            var result = IngredientManager.Update(formulaId, ingredientData, userId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok();
+        }
+
+        /// <summary>
+        /// Deletes an ingredient
+        /// </summary>
+        [Route("formulas/{formulaId}/ingredients/{ingredientId}")]
+        [HttpDelete]
+        public IHttpActionResult DeleteIngredient(int formulaId, int ingredientId)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = DetermineUserId();
+
+            var result = IngredientManager.Delete(formulaId, ingredientId, userId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok(result.Ingredient);
+        }
+
+        /// <summary>
+        /// Gets ingredients that match the analysis component
+        /// </summary>
+        [Route("formulas/{formulaId}/analysisComponents/{analysisComponentId}/ingredients")]
+        [HttpGet]
+        public IHttpActionResult GetIngredientsMatchingAnalysisComponent(int formulaId, int analysisComponentId)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var result = IngredientManager.GetIngredientsMatchingAnalysisComponent(formulaId, analysisComponentId);
+            var errorResult = CheckForErrorResult(result);
+
+            return errorResult ?? Ok(result.Ingredients);
+        }
+
+        private static ServiceParameters GetServiceParameters()
+        {
+            var serviceParameters = ConfigurationHelper.GetServiceParameters();
+            return serviceParameters;
+        }
+
+        private IHttpActionResult CheckForErrorResult(ManagerResult result)
+        {
+            if (result.IsSuccessful)
+            {
+                return null;
+            }
+
+            if (result.IsNotFound)
+            {
+                return NotFound();
+            }
+
+            if (result.IsUnauthorized)
+            {
+                return StatusCode(HttpStatusCode.Forbidden);
+            }
+
+            if (result.IsServerError)
+            {
+                return InternalServerError(result.ServerException);
+            }
+
+            if (result.IsClientError)
+            {
+                return BadRequest(result.ClientErrorMessage);
+            }
+
+            return null;
+        }
+
+        private string DetermineUserId()
+        {
+            var userId = UserIdentityHelper.DetermineUserId(User.Identity);
+            return userId;
+        }
+    }
+}
+
+Global.asax.cs
+-------------------
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.Http;
+using System.Web.Routing;
+
+namespace IFF.AFB.Api
+{
+    public class WebApiApplication : System.Web.HttpApplication
+    {
+        protected void Application_Start()
+        {
+            UnityConfig.RegisterComponents();
+            GlobalConfiguration.Configure(WebApiConfig.Register);
+        }
+    }
+}
+
+
+Web.Config
+--------------
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  For more information on how to configure your ASP.NET application, please visit
+  http://go.microsoft.com/fwlink/?LinkId=301879
+  -->
+<configuration>
+  <configSections>
+    <!-- For more information on Entity Framework configuration, visit http://go.microsoft.com/fwlink/?LinkID=237468 -->
+    <section name="entityFramework" type="System.Data.Entity.Internal.ConfigFile.EntityFrameworkSection, EntityFramework, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" requirePermission="false" />
+    <section name="log4net" type="log4net.Config.Log4NetConfigurationSectionHandler, log4net" />    
+  </configSections>
+
+  <log4net>
+    <!-- file appender -->
+    <appender name="RollingFileAppender" type="log4net.Appender.RollingFileAppender">
+      <file value="C:/logs/ServiceLogs.log" />
+      <appendToFile value="true" />
+      <rollingStyle value="Date" />
+      <maxSizeRollBackups value="30" />
+      <datePattern value=".yyyy-MM-dd" />
+      <staticLogFileName value="true" />
+      <layout type="log4net.Layout.PatternLayout">
+        <conversionPattern value="%date [%thread] %-5level %logger - %message%newline" />
+      </layout>
+    </appender>
+    <root>
+      <level value="INFO" /> <!-- Valid Values : OFF/ALL/ERROR/INFO/WARN!-->
+      <appender-ref ref="RollingFileAppender" />
+    </root>
+  </log4net>
+  
+  <connectionStrings>
+    <add name="AfbContext" connectionString="data source=net-db-dev01.iff.com;Database=AFB;Trusted_Connection=true;" providerName="System.Data.SqlClient" />
+    
+  </connectionStrings>
+  <appSettings>
+    <add key="AuthorizedEditorsGroup" value="global\afb_dev_editors" />
+    <add key="ApiRootUrl" value="http://localhost:26245" />
+    <add key="AnalysesServiceUrl" value="http://sapdo1.iff.com:50000/RESTAdapter/api/v1/analyses/{request}/{run}" />
+    <add key="OccurrencesServiceUrl" value="http://sapdo1.iff.com:50000/RESTAdapter/api/v1/aimOccurrences" />
+    <add key="IpcsServiceUrl" value="http://sapdo1.iff.com:50000/RESTAdapter/api/v1/aimIpcs" />    
+    <add key="IpcsSearchServiceUrl" value="http://sapdo1.iff.com:50000/RESTAdapter/api/v1/aimIpcs/search" />
+    <add key="UsersServiceUrl" value="http://usubnetwbdv1.global.iff.com:50169/users/{userId}" />
+    <add key="ServiceUsername" value="afbsys" />
+    <add key="ServicePassword" value="1qaz@wsx" />
+  </appSettings>
+  <system.serviceModel>
+    <bindings>
+      <basicHttpBinding>
+        <binding name="BasicHttpBinding_IExperimentsService" />
+      </basicHttpBinding>
+    </bindings>
+    <client>
+      <endpoint address="http://dev-apps.iff.com/Services/Experiments.svc" binding="basicHttpBinding" bindingConfiguration="BasicHttpBinding_IExperimentsService" contract="Experiments.IExperimentsService" name="BasicHttpBinding_IExperimentsService" />
+    </client>
+  </system.serviceModel>
+  <system.web>
+    <compilation debug="true" targetFramework="4.5" />
+    <httpRuntime targetFramework="4.5" />
+  </system.web>
+  <system.webServer>
+    <handlers>
+      <remove name="ExtensionlessUrlHandler-Integrated-4.0" />
+      <remove name="OPTIONSVerbHandler" />
+      <remove name="TRACEVerbHandler" />
+      <add name="ExtensionlessUrlHandler-Integrated-4.0" path="*." verb="*" type="System.Web.Handlers.TransferRequestHandler" preCondition="integratedMode,runtimeVersionv4.0" />
+    </handlers>
+  </system.webServer>
+  <runtime>
+    <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Helpers" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="1.0.0.0-3.0.0.0" newVersion="3.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Mvc" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="1.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.WebPages" publicKeyToken="31bf3856ad364e35" />
+        <bindingRedirect oldVersion="1.0.0.0-3.0.0.0" newVersion="3.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Http" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Newtonsoft.Json" publicKeyToken="30ad4fe6b2a6aeed" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-6.0.0.0" newVersion="6.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Net.Http.Formatting" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+    </assemblyBinding>
+  </runtime>
+  <system.codedom>
+    <compilers>
+      <compiler language="c#;cs;csharp" extension=".cs" type="Microsoft.CodeDom.Providers.DotNetCompilerPlatform.CSharpCodeProvider, Microsoft.CodeDom.Providers.DotNetCompilerPlatform, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" warningLevel="4" compilerOptions="/langversion:6 /nowarn:1659;1699;1701" />
+      <compiler language="vb;vbs;visualbasic;vbscript" extension=".vb" type="Microsoft.CodeDom.Providers.DotNetCompilerPlatform.VBCodeProvider, Microsoft.CodeDom.Providers.DotNetCompilerPlatform, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" warningLevel="4" compilerOptions="/langversion:14 /nowarn:41008 /define:_MYTYPE=\&quot;Web\&quot; /optionInfer+" />
+    </compilers>
+  </system.codedom>
+  <entityFramework>
+    <defaultConnectionFactory type="System.Data.Entity.Infrastructure.LocalDbConnectionFactory, EntityFramework">
+      <parameters>
+        <parameter value="mssqllocaldb" />
+      </parameters>
+    </defaultConnectionFactory>
+    <providers>
+      <provider invariantName="System.Data.SqlClient" type="System.Data.Entity.SqlServer.SqlProviderServices, EntityFramework.SqlServer" />
+    </providers>
+  </entityFramework>
+</configuration>
